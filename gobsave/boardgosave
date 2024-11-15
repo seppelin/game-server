@@ -1,0 +1,275 @@
+package gobsave
+
+import (
+	"fmt"
+	"math/bits"
+	"slices"
+)
+
+type Player int // 0..2
+type Size int   // 0..3
+type Pos int    // 0..9
+type State int
+type BoardId uint64
+
+const (
+	StateNone State = 0
+	StateWin  State = 1
+	StateLoss State = 2
+	StateDraw State = 3
+)
+
+type Move struct {
+	New     bool
+	Size    Size
+	FromPos Pos
+	ToPos   Pos
+}
+
+type Board struct {
+	layers [2][3]uint16
+	pieces [2][3]int
+	player Player
+	moves  int
+}
+
+func NewBoard() Board {
+	return Board{
+		pieces: [2][3]int{
+			{2, 2, 2},
+			{2, 2, 2},
+		},
+	}
+}
+
+func (b Board) String() string {
+	return fmt.Sprintf(
+		"board %v %v {\n"+
+			"	%09b - %09b  |  %d - %d\n"+
+			"	%09b - %09b  |  %d - %d\n"+
+			"	%09b - %09b  |  %d - %d\n"+
+			"}\n",
+		b.player, b.moves,
+		b.layers[0][2], b.layers[1][2], b.pieces[0][2], b.pieces[1][2],
+		b.layers[0][1], b.layers[1][1], b.pieces[0][1], b.pieces[1][1],
+		b.layers[0][0], b.layers[1][0], b.pieces[0][0], b.pieces[1][0],
+	)
+}
+
+func (b Board) topView(p Player) uint16 {
+	return b.layers[p][0]&^b.layers[p^1][1] |
+		b.layers[p][1]&^b.layers[p^1][2] |
+		b.layers[p][2]&0b111111111
+}
+
+func (b Board) getId() BoardId {
+	id := BoardId(0)
+	for sign := range 2 {
+		for size := range 3 {
+			id |= BoardId(b.layers[sign][size])
+			id <<= 9
+		}
+	}
+	id |= BoardId(b.moves)
+	return id
+}
+
+func (b *Board) reorder(order [9]int) {
+	layers := b.layers
+	for sign := range 2 {
+		for size := range 3 {
+			b.layers[sign][size] = 0
+		}
+	}
+	for sign := range 2 {
+		for size := range 3 {
+			for pos := range 9 {
+				if layers[sign][size]&(1<<pos) == 0 {
+					continue
+				}
+				b.layers[sign][size] |= 1 << order[pos]
+			}
+		}
+	}
+}
+
+func (b Board) GetMaxId() BoardId {
+	rotate := [9]int{2, 5, 8, 1, 4, 7, 0, 3, 6}
+	mirror := [9]int{6, 7, 8, 3, 4, 5, 0, 1, 2}
+	maxId := BoardId(0)
+	for range 2 {
+		for range 4 {
+			maxId = max(maxId, b.getId())
+			b.reorder(rotate)
+		}
+		b.reorder(mirror)
+	}
+	if maxId == 0 {
+		fmt.Printf("%v", b)
+	}
+	return maxId
+}
+
+func (b Board) IsPieceLeft(p Player, s Size) bool {
+	return b.pieces[p][s] > 0
+}
+
+func (b Board) IsMovable(p Player, s Size, pos Pos) bool {
+	var bigger uint16 = 0
+	switch s {
+	case 0:
+		bigger |= b.layers[0][1] | b.layers[1][1]
+		fallthrough
+	case 1:
+		bigger |= b.layers[0][2] | b.layers[1][2]
+	}
+	return (1<<pos)&b.layers[p][s] & ^bigger != 0
+}
+
+func (b Board) IsCovering(s Size, pos Pos) bool {
+	var smaller uint16 = 0
+	switch s {
+	case 1:
+		smaller = b.layers[0][0] | b.layers[1][0]
+	case 2:
+		smaller = b.layers[0][1] | b.layers[1][1]
+	}
+	return (1<<pos)&smaller != 0
+}
+
+func (b Board) IsFree(s Size, pos Pos) bool {
+	var same = b.layers[0][2] | b.layers[1][2]
+	switch s {
+	case 0:
+		same |= b.layers[0][0] | b.layers[1][0]
+		fallthrough
+	case 1:
+		same |= b.layers[0][1] | b.layers[1][1]
+	}
+	return (1<<pos)&same == 0
+}
+
+func (b *Board) DoMove(m Move) {
+	switch m.New {
+	case true:
+		b.pieces[b.player][m.Size] -= 1
+		b.layers[b.player][m.Size] |= 1 << m.ToPos
+		b.player ^= 1
+		b.moves += 1
+	case false:
+		b.layers[b.player][m.Size] ^= 1 << m.FromPos
+		b.layers[b.player][m.Size] |= 1 << m.ToPos
+		b.player ^= 1
+		b.moves += 1
+	}
+}
+
+func (b *Board) UndoMove(m Move) {
+	switch m.New {
+	case true:
+		b.player ^= 1
+		b.moves -= 1
+		b.layers[b.player][m.Size] ^= 1 << m.ToPos
+		b.pieces[b.player][m.Size] += 1
+	case false:
+		b.player ^= 1
+		b.moves -= 1
+		b.layers[b.player][m.Size] ^= 1 << m.ToPos
+		b.layers[b.player][m.Size] |= 1 << m.FromPos
+	}
+}
+
+func (b Board) GetTop(pos Pos) (p Player, s Size, ok bool) {
+	for p = 0; p < 2; p++ {
+		for s = 0; s < 3; s++ {
+			if b.IsMovable(p, s, pos) {
+				ok = true
+				return
+			}
+		}
+	}
+	return
+}
+
+func (b Board) GetState() State {
+	isLine := func(l uint16) State {
+		// horizontal
+		var check = l & (l << 1) & (l << 2) & 0b100100100
+		// diag 1
+		check |= l & (l << 2) & (l << 4) & 0b001000000
+		// vertical
+		check |= l & (l << 3) & (l << 6)
+		// diag 2
+		check |= l & (l << 4) & (l << 8)
+		if check != 0 {
+			return 1
+		}
+		return 0
+	}
+
+	var win = isLine(b.topView(b.player))
+	var loss = isLine(b.topView(b.player ^ 1))
+	return win | (loss << 1)
+}
+
+func (b Board) GetMoves() []Move {
+	var moves []Move
+	for s := Size(2); s >= 0; s-- {
+		for toPos := Pos(0); toPos < 9; toPos++ {
+			if !b.IsFree(s, toPos) {
+				continue
+			}
+			// Board
+			for fromPos := Pos(0); fromPos < 9; fromPos++ {
+				if !b.IsMovable(b.player, s, fromPos) {
+					continue
+				}
+				moves = append(moves, Move{false, s, fromPos, toPos})
+			}
+			// new
+			if b.pieces[b.player][s] < 1 {
+				continue
+			}
+			moves = append(moves, Move{true, s, -1, toPos})
+		}
+	}
+	return moves
+}
+
+func (b Board) GetValue() (value int) {
+	twoCount := func(l uint16) (count int) {
+		count += bits.OnesCount16( // Horizontal
+			uint16(l&(l<<1)&0b110110110) | uint16((l>>2)&l&0b001001001),
+		)
+		count += bits.OnesCount16( // Diag
+			uint16(l&(l<<2)&0b001010000) | uint16((l>>4)&l&0b000000100),
+		)
+		count += bits.OnesCount16( // Vertical
+			uint16(l&(l<<3)) | uint16((l>>6)&l),
+		)
+		count += bits.OnesCount16( // Diag
+			uint16(l&(l<<4)) | uint16((l>>8)&l),
+		)
+		return
+	}
+
+	value += int(b.pieces[b.player][0] - b.pieces[b.player^1][0])
+	value += int(b.pieces[b.player][1] - b.pieces[b.player^1][1])
+	top := b.topView(b.player)
+	topN := b.topView(b.player ^ 1)
+	value += bits.OnesCount16(uint16(top)) - bits.OnesCount16(uint16(topN))
+	value += twoCount(top) - twoCount(topN)
+	return
+}
+
+func (board *Board) OrderMoves(m []Move) {
+	slices.SortFunc(m, func(a Move, b Move) int {
+		board.DoMove(a)
+		va := board.GetValue()
+		board.UndoMove(a)
+		board.DoMove(b)
+		vb := board.GetValue()
+		board.UndoMove(b)
+		return va - vb
+	})
+}

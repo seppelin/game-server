@@ -1,0 +1,37 @@
+package components
+
+templ Layout(title string, content templ.Component) {
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="public/styles.css">
+        <link rel="stylesheet" href="public/start.css">
+        <link rel="stylesheet" href="public/gobblers.css">
+        <script src="public/script.js"></script>
+        <script src="public/2.0.3_dist_htmx.min.js"></script>
+        <title>{ title }</title>
+        <link rel="icon" type="image/png" href="/public/favicon/favicon-96x96.png" sizes="96x96" />
+        <link rel="icon" type="image/svg+xml" href="/public/favicon/favicon.svg" />
+        <link rel="shortcut icon" href="/public/favicon/favicon.ico" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/public/favicon/apple-touch-icon.png" />
+        <link rel="manifest" href="/public/favicon/site.webmanifest" />
+    </head>
+    <body>
+        <header>
+            <a hx-get="/" hx-target="#content" hx-push-url="true">Home</a>
+            <a>Matches</a>
+            <a>Account</a>
+        </header>
+        <main id="content">
+            @content
+        </main>
+        <footer>
+            Game Server
+            <br>
+            Made by seppelin
+        </footer>
+    </body>
+    </html>
+}

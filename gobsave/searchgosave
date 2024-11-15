@@ -1,0 +1,208 @@
+package gobsave
+
+import (
+	// #include "csearch/search.h"
+	"C"
+	_ "embed"
+	"encoding/gob"
+	"os"
+	"sync"
+	"time"
+)
+import (
+	"bytes"
+)
+
+//go:embed scorebook
+var cacheData []byte
+
+type EvalKind uint8
+
+const (
+	EvalWin    EvalKind = 3
+	EvalDraw   EvalKind = 2
+	EvalLoss   EvalKind = 1
+	EvalTooFar EvalKind = 0
+)
+
+type Eval struct {
+	Kind  EvalKind
+	Depth uint8
+	Time  float32
+	Nodes uint64
+}
+
+type search struct {
+	added *sync.Cond
+	mutex sync.Mutex
+	cache map[BoardId]Eval
+	eval  map[BoardId]struct{}
+}
+
+var s search
+
+func init() {
+	reader := bytes.NewReader(cacheData)
+	var c map[BoardId]Eval
+	dec := gob.NewDecoder(reader)
+	err := dec.Decode(&c)
+	if err != nil {
+		c = map[BoardId]Eval{}
+	}
+	println("Search: ", len(c), " entries loaded")
+	s = search{
+		mutex: sync.Mutex{},
+		cache: c,
+		eval:  map[BoardId]struct{}{},
+	}
+	s.added = sync.NewCond(&s.mutex)
+}
+
+func SaveCache() {
+	buf := new(bytes.Buffer)
+	enc := gob.NewEncoder(buf)
+	err := enc.Encode(s.cache)
+	if err != nil {
+		panic(err)
+	}
+	err = os.WriteFile("scorebook", buf.Bytes(), 0644)
+	if err != nil {
+		panic(err)
+	}
+	println("Search: ", len(s.cache), " entries saved")
+}
+
+// Mutex has to be locked
+func getCached(id BoardId) (Eval, bool) {
+	if _, ok := s.eval[id]; ok {
+		for {
+			s.added.Wait()
+			if _, ok := s.eval[id]; !ok {
+				if e, ok := s.cache[id]; ok {
+					return e, ok
+				} else {
+					print("Search: removed eval but not cached")
+					return e, ok
+				}
+			}
+		}
+	}
+	e, ok := s.cache[id]
+	return e, ok
+}
+
+func CalcBoard(b Board, maxDepth int) Eval {
+	id := b.GetMaxId()
+	depth := min(maxDepth, 10)
+
+	s.mutex.Lock()
+	if e, ok := getCached(id); ok {
+		if e.Kind != EvalTooFar || int(e.Depth) >= maxDepth {
+			s.mutex.Unlock()
+			e.Nodes = 0
+			e.Time = 0
+			return e
+		}
+		depth = max(depth, int(e.Depth))
+	}
+	s.eval[id] = struct{}{}
+	s.mutex.Unlock()
+
+	// Eval
+	e := evaluate(&b, depth, maxDepth)
+
+	// Add result
+	s.mutex.Lock()
+	delete(s.eval, id)
+	s.cache[id] = e
+	s.mutex.Unlock()
+	s.added.Broadcast()
+	return e
+}
+
+func pruneEval(b Board, depth, maxDepth int) Eval {
+
+}
+
+const maxScore = 999
+const winScore = 100
+const lossScore = -winScore
+const tooFarScore int = 1000
+
+func pruneNegamax(b *Board, depth, pruneDepth int, alpha, beta int, nodes *uint64) int {
+	state := b.GetState()
+	switch state {
+	case StateWin:
+		return winScore + depth
+	case StateLoss:
+		return -(winScore + depth)
+	case StateDraw:
+		return 0
+	}
+
+	bestPossible := winScore + depth - 1
+	if beta > bestPossible {
+		beta = bestPossible
+		if alpha >= beta {
+			return alpha
+		}
+	}
+
+	id := b.GetMaxId()
+	s.mutex.Lock()
+	if e, ok := getCached(id); ok {
+		if e.Kind != EvalTooFar || int(e.Depth) >= depth {
+			if e.Kind == EvalWin {
+				return winScore + depth - int(e.Depth)
+			} else if e.Kind == EvalLoss {
+				return -(winScore + depth - int(e.Depth))
+			} else if e.Kind == EvalDraw {
+				return 0
+			}
+		}
+	}
+	s.eval[id] = struct{}{}
+	s.mutex.Unlock()
+
+	if ok {
+		tooFar := ce.Score >= tooFarScore
+		if !tooFar {
+			s.mutex.RUnlock()
+
+			return
+		} else {
+			alreadySearched := ce.Score - tooFarScore
+			depth = max(depth, alreadySearched)
+		}
+	}
+}
+
+func evaluate(b *Board, depth, maxDepth int) Eval {
+	cb := C.bInit()
+	for sign := range 2 {
+		for size := range 3 {
+			cb.layers[sign][size] = C.int(b.layers[sign][size])
+			cb.pieces[sign][size] = C.int(b.pieces[sign][size])
+		}
+	}
+	cb.player = C.int(b.player)
+	cNodes := C.longlong(0)
+	start := time.Now()
+	var result int
+	for {
+		result = int(C.evaluate(&cb, C.int(depth), &cNodes))
+		if result != 0 || depth >= maxDepth {
+			break
+		}
+		depth += 1
+	}
+	end := time.Now()
+	t := end.Sub(start).Seconds()
+
+	return Eval{
+		Kind:  EvalKind(result),
+		Depth: uint8(depth),
+		Time:  float32(t),
+		Nodes: uint64(cNodes),
+	}
+}

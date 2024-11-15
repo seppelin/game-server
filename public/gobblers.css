@@ -1,0 +1,104 @@
+#gobblers {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#g-game-id {
+    display: none;
+}
+
+#g-board {
+    width: 72vmin;
+    height: 72vmin;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+}
+
+.g-new {
+    width: 24vmin;
+    height: 72vmin;
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr 1fr;
+}
+
+.g-cell {
+    border: 1px solid transparent;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 5%;
+    position: relative; 
+    background: rgba(256, 256, 256, .1);
+    box-shadow: 0 0 0.15em;
+}
+
+.g-cell-act {
+    cursor: pointer;
+    border: 0.05em solid cadetblue;
+}
+
+.g-cell-sel {
+    border: 0.05em solid wheat;
+}
+
+.g-piece-o,
+.g-piece-x {
+    position: absolute;
+    border: 1px solid black;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.g-piece-o {
+    background-color: green;
+}
+
+.g-piece-x {
+    background-color: red;
+}
+
+.g-piece-double {
+    margin: 0 0 8% 8%;
+}
+
+.g-piece-0 {
+    height: 35%;
+    width: 35%;
+}
+
+.g-piece-1 {
+    height: 65%;
+    width: 65%;
+}
+
+.g-piece-2 {
+    height: 85%;
+    width: 85%;
+}
+
+#g-new-0-0, #g-new-1-0 {
+    border-radius: 10% 10% 0 0;
+}
+
+#g-new-0-2, #g-new-1-2 {
+    border-radius: 0 0 10% 10%;
+}
+
+#g-board-0 {
+    border-radius: 10% 0 0 0;
+}
+
+#g-board-2 {
+    border-radius: 0 10% 0 0;
+}
+
+#g-board-6 {
+    border-radius: 0 0 0 10%;
+}
+
+#g-board-8 {
+    border-radius: 0 0 10% 0;
+}

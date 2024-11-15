@@ -1,0 +1,33 @@
+package components
+
+type HomeCard struct {
+	Name  string
+	Desc  string
+	Route string
+}
+
+templ Home(cards []HomeCard) {
+    for _, card := range cards {
+        @homeCard(card)
+    }
+}
+
+templ homeCard(card HomeCard) {
+    <article id="s-card">
+        <header>{ card.Name }</header>
+        { card.Desc }
+        <footer>
+            <button
+                if card.Route != "" {
+                    hx-get={card.Route}
+                    hx-target="#content"
+                    hx-push-url="true"
+                } else {
+                    disabled
+                }
+            >
+                <span>Play!</span>
+            </button>
+        </footer>
+    </article>
+}

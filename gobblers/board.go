@@ -17,10 +17,10 @@ const (
 )
 
 type Move struct {
-	New  bool
-	From Pos
-	To   Pos
-	Size Size
+	New  bool `json:"new"`
+	From Pos  `json:"from"`
+	To   Pos  `json:"to"`
+	Size Size `json:"size"`
 }
 
 type Board struct {

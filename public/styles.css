@@ -17,7 +17,18 @@ body>header, body>footer {
 	background: rgb(0,0,0);
 }
 
+header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+#header-acc {
+	margin-left: auto;
+}
+
 header>a {
+	margin: 0 10px;
 	cursor: pointer;
 	color: orchid;
 }

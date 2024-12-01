@@ -1,0 +1,61 @@
+package components
+
+templ Account(username string, anon bool) {
+    <div>
+        if anon {
+            <p>You are not logged in</p>
+        } else {
+            <p>Account: {username}</p>
+            <button hx-get="/account/sign-out" hx-target="#content">Sign out</button>
+        }
+        <button hx-get="/account/sign-in" hx-target="#content">Sign in</button>
+        <button hx-get="/account/sign-up" hx-target="#content">Sign up</button>
+    </div>
+}
+
+templ AccountOOB(username string, anon bool) {
+    @Account(username, anon)
+    <a hx-swap-oob="true" id="header-acc" hx-get="/account" hx-target="#content" hx-push-url="true" class={templ.KV("account-anon", anon)}>
+        Account: {username}
+    </a>
+}
+
+templ AccountSignInForm(name, password, err string) {
+    <form
+        hx-put="/account/sign-in"
+        hx-target="#content"
+    >
+        <strong>Sign in</strong>
+        <label>
+            Name<input name="name" type="text" value={name} />
+        </label>
+        <label>
+            Password<input name="password" type="password" value={password}/>
+        </label>
+        if err != "" {
+            <p>{err}</p>
+        }
+        <button type="submit">Submit</button>
+        <button hx-get="/account" hx-target="#content">Cancel</button>
+    </form>
+}
+
+templ AccountSignUpForm(name, password, err string) {
+    <form
+        hx-put="/account/sign-up"
+        hx-target="#content"
+    >
+        <strong>Sign up</strong>
+        <label>
+            Name<input name="name" type="text" value={name} />
+        </label>
+        <label>
+            Password<input name="password" type="password" value={password}/>
+        </label>
+        if err != "" {
+            <p>{err}</p>
+        }
+        <button type="submit">Submit</button>
+        <button hx-get="/account" hx-target="#content">Cancel</button>
+    </form>
+}

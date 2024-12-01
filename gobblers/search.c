@@ -190,7 +190,7 @@ int negamax(Board *b, int alpha, int beta, int depth, long long *nodes) {
       for (int from = 0; from < 9; from++) {
         if (!isMovable(b, size, from))
           continue;
-        
+
         bDoBoardMove(b, size, from, to);
         int score = negamax(b, -beta, -alpha, depth - 1, nodes);
         bUndoBoardMove(b, size, from, to);

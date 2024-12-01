@@ -1,6 +1,6 @@
 package components
 
-templ Layout(title string, content templ.Component) {
+templ Layout(title, username string, anon bool, content templ.Component) {
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -22,7 +22,9 @@ templ Layout(title string, content templ.Component) {
         <header>
             <a hx-get="/" hx-target="#content" hx-push-url="true">Home</a>
             <a>Matches</a>
-            <a>Account</a>
+            <a id="header-acc" hx-get="/account" hx-target="#content" hx-push-url="true" class={templ.KV("account-anon", anon)}>
+                Account: {username}
+            </a>
         </header>
         <main id="content">
             @content

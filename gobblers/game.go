@@ -65,7 +65,7 @@ func (g Game) Selection() (Selection, Move) {
 }
 
 func (g *Game) DoMove(m Move) bool {
-	if g.board.IsMoveValid(m) {
+	if g.board.IsMoveValid(m) && g.board.GetState() == StateNone {
 		g.board.DoMove(m)
 		g.history = append(g.history, m)
 		return true

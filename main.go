@@ -1,17 +1,16 @@
 package main
 
 import (
-	"fmt"
 	"game-server/components"
-	"game-server/gobblers"
-	"math/rand/v2"
+	"game-server/db"
+	"game-server/middlewares"
+	"log"
 	"net/http"
 	"strings"
 
 	"github.com/a-h/templ"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/gorilla/websocket"
 )
 
 var MODES = []components.HomeCard{
@@ -23,90 +22,60 @@ var MODES = []components.HomeCard{
 func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	fs := http.FileServer(http.Dir("public"))
-	r.Handle("/public/*", http.StripPrefix("/public/", fs))
+	r.Use(middlewares.SessionName)
+	r.Handle("/public/*", http.StripPrefix("/public/", http.FileServer(http.Dir("./public"))))
 	r.Get("/", home)
-	r.Get("/gobblers", gobblersHandler)
-	r.HandleFunc("/gobblers/ws-{board_id}", gobblersWsHandler)
+	r.Get("/gobblers", GobblersHandler)
+	r.Get("/account", Account)
+	r.Get("/account/sign-out", AccountSignOut)
+	r.Get("/account/sign-up", AccountSignUp)
+	r.Get("/account/sign-in", AccountSignIn)
+	r.Put("/account/sign-up", AccountPutSignUp)
+	r.Put("/account/sign-in", AccountPutSignIn)
+
+	r.HandleFunc("/gobblers/play-{game_id}-{game_state}", GobblersPlayHandler)
 	http.ListenAndServe(":3000", r)
 }
 
-func render(w http.ResponseWriter, r *http.Request, comp templ.Component) {
+func home(w http.ResponseWriter, r *http.Request) {
+	renderPage(w, r, components.Home(MODES))
+}
+
+func renderPage(w http.ResponseWriter, r *http.Request, comp templ.Component) {
 	if r.Header.Get("hx-request") != "true" {
-		templ.Handler(components.Layout("Game Server", comp)).ServeHTTP(w, r)
+		// On full page load set session accessed_at
+		session, err := db.SessionByName(r.Context().Value(middlewares.SessionNameKey{}).(string))
+
+		anon := true
+		name := "Anon"
+		if err == nil {
+			log.Println(session)
+			db.SetAccessedAt(session.Id)
+			user, err := db.User(session.UserID)
+			if err == nil {
+				anon = false
+				name = user.Name
+			} else {
+				log.Println("Get user page reload:", err)
+			}
+		} else {
+			log.Println("Get session page reload:", err, r.Context().Value(middlewares.SessionNameKey{}).(string))
+		}
+		templ.Handler(components.Layout("Game Server", name, anon, comp)).ServeHTTP(w, r)
 	} else {
 		templ.Handler(comp).ServeHTTP(w, r)
 	}
 }
 
-func home(w http.ResponseWriter, r *http.Request) {
-	render(w, r, components.Home(MODES))
-}
-
-type WsMessage struct {
-	Id   string
-	Data interface{}
-}
-
-func gobblersWsHandler(w http.ResponseWriter, r *http.Request) {
-	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool {
-			return true
-		},
+func getClientAddress(r *http.Request) string {
+	// Check for the X-Forwarded-For header
+	xForwardedFor := r.Header.Get("X-Forwarded-For")
+	if xForwardedFor != "" {
+		// The X-Forwarded-For header can contain multiple IPs, take the first one
+		ips := strings.Split(xForwardedFor, ",")
+		return strings.TrimSpace(ips[0]) // Return the first IP address
 	}
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		fmt.Println("Error while upgrading ws: ", err)
-		return
-	}
-	defer conn.Close()
 
-	fmt.Println("Client connected")
-	g := gobblers.NewGame()
-	conn.WriteMessage(websocket.TextMessage, []byte("turn"))
-
-	for {
-		_, msg, err := conn.ReadMessage()
-		if err != nil {
-			fmt.Println("Error while reading message:", err)
-			break
-		}
-		println(string(msg))
-		cmds := strings.Split(string(msg), ":")
-		println(cmds)
-		switch cmds[0] {
-		case "move":
-			parts := strings.Split(cmds[1], "-")
-			for i := range 2 {
-				n := parts[i][1] - '0'
-				if parts[i][0] == 'n' {
-					g.SelectNew(gobblers.Size(n))
-				} else {
-					g.SelectBoard(gobblers.Pos(n))
-				}
-			}
-			_, move := g.Selection()
-			if !g.DoMove(move) {
-				conn.WriteMessage(websocket.TextMessage, []byte("stop"))
-			}
-			moves := g.Board().Moves()
-			m := moves[rand.IntN(len(moves))]
-			if !g.DoMove(m) {
-				conn.WriteMessage(websocket.TextMessage, []byte("stop"))
-			}
-			from := ""
-			to := "b" + string('0'+m.To)
-			if m.New {
-				from += "n" + string('0'+m.Size+3)
-			} else {
-				from += "b" + string('0'+m.From)
-			}
-			conn.WriteMessage(websocket.TextMessage, []byte("move:"+from+"-"+to))
-			conn.WriteMessage(websocket.TextMessage, []byte("turn"))
-		}
-	}
-}
-
-func gobblersHandler(w http.ResponseWriter, r *http.Request) {
-	render(w, r, components.Gobblers(gobblers.NewBoard()))
+	// Fallback to RemoteAddr
+	return r.RemoteAddr // This contains the IP and port
 }

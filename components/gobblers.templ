@@ -1,88 +1,89 @@
 package components
 
 import (
-    "game-server/gobblers"
-    "fmt"
-    "strconv"
+	"fmt"
+	"game-server/gobblers"
+	"strconv"
 )
 
-templ Gobblers(b gobblers.Board) {
-    <div id="gobblers">
-        <div id="g-game-id">12345:0o</div>
-        @GobblersNew(b, gobblers.Player(0))
-        @GobblersBoard(b)
-        @GobblersNew(b, gobblers.Player(1))
-        <script>
-            gobblersHandleGame();
+templ Gobblers(b gobblers.Board, game_id int, game_state int) {
+	{{ meta := `{"id":` + strconv.Itoa(game_id) + `,"state":` + strconv.Itoa(game_state) + `}` }}
+	<div id="gobblers">
+		<div id="g-game-meta">{ meta }</div>
+		@GobblersNew(b, gobblers.Player(0))
+		@GobblersBoard(b)
+		@GobblersNew(b, gobblers.Player(1))
+		<script>
+            new GobblersGame()
         </script>
-    </div>
+	</div>
 }
 
 templ GobblersBoard(b gobblers.Board) {
-    <div id="g-board">
-        for i := range 9 {
-            {{
-                pos := gobblers.Pos(i)
-                // Piece
-                piece := ""
-                p, s, ok := b.GetTop(pos)
-                if ok {
-                    if p == 0 {
-                        piece += "g-piece-o"
-                    } else {
-                        piece += "g-piece-x"
-                    }
-                    piece += " g-piece-" + strconv.Itoa(int(s))
-                }
-            }}
-            <div id={ fmt.Sprintf("g-board-%d", i) } class="g-cell">
-                if piece != "" {
-                    <span class={piece}></span>
-                }
-            </div>
-        }
-    </div>
+	<div id="g-board">
+		for i := range 9 {
+			{{
+	pos := gobblers.Pos(i)
+	// Piece
+	piece := ""
+	p, s, ok := b.GetTop(pos)
+	if ok {
+		if p == 0 {
+			piece += "g-piece-o"
+		} else {
+			piece += "g-piece-x"
+		}
+		piece += " g-piece-" + strconv.Itoa(int(s))
+	}
+			}}
+			<div id={ fmt.Sprintf("g-board-%d", i) } class="g-cell">
+				if piece != "" {
+					<span class={ piece }></span>
+				}
+			</div>
+		}
+	</div>
 }
 
 templ GobblersNew(b gobblers.Board, p gobblers.Player) {
-    {{
-        id := "g-new-"
-        if (p == gobblers.Player(0)) {
-            id += "o"
-        } else {
-            id += "x"
-        }
-        id_add := int(p) * 3
-    }}
-    <div id={ id } class="g-new">
-        for i := range 3 {
-            {{
-                s := gobblers.Size(i)
-                // Piece
-                piece := ""
-                if b.Pieces[p][s] > 0 {
-                    piece += "g-piece-"
-                    if p == 0 {
-                        piece += "o"
-                    } else {
-                        piece += "x"
-                    }
-                    piece += " g-piece-" + strconv.Itoa(int(s))
-                }
-                // Double
-                double := ""
-                if b.Pieces[p][s] > 1 {
-                    double = piece + " g-piece-double"
-                }
-            }}
-            <div id={fmt.Sprintf("g-new-%d", i+id_add)} class="g-cell">
-                if piece != "" {
-                    <span class={piece}></span>
-                }
-                if double != "" {
-                    <span class={double}></span>
-                }
-            </div>
-        }
-    </div>
+	{{
+	id := "g-new-"
+	if p == gobblers.Player(0) {
+		id += "o"
+	} else {
+		id += "x"
+	}
+	id_add := int(p) * 3
+	}}
+	<div id={ id } class="g-new">
+		for i := range 3 {
+			{{
+	s := gobblers.Size(i)
+	// Piece
+	piece := ""
+	if b.Pieces[p][s] > 0 {
+		piece += "g-piece-"
+		if p == 0 {
+			piece += "o"
+		} else {
+			piece += "x"
+		}
+		piece += " g-piece-" + strconv.Itoa(int(s))
+	}
+	// Double
+	double := ""
+	if b.Pieces[p][s] > 1 {
+		double = piece + " g-piece-double"
+	}
+			}}
+			<div id={ fmt.Sprintf("g-new-%d", i+id_add) } class="g-cell">
+				if piece != "" {
+					<span class={ piece }></span>
+				}
+				if double != "" {
+					<span class={ double }></span>
+				}
+			</div>
+		}
+	</div>
 }
